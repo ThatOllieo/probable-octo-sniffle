@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scoreboard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 1920px;
+      height: 1080px;
+      background: transparent;
+      overflow: hidden;
+      font-family: 'Arial Black', 'Arial', sans-serif;
+    }
+
+    #scoreboard {
+      position: absolute;
+      bottom: 40px;
+      right: 40px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      min-width: 360px;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 4px 32px rgba(0,0,0,0.7);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    #scoreboard.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── title bar ────────────────────────────────────────────────────────── */
+
+    #title-bar {
+      background: #1a2d3e;
+      color: #e0e0e0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px 7px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+
+    #title-text {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    #period-badge {
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: #1a2d3e;
+      padding: 2px 8px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: #BE9D04;
+    }
+
+    /* ── team rows ────────────────────────────────────────────────────────── */
+
+    .team-row {
+      display: flex;
+      align-items: stretch;
+      background: #253849;
+    }
+
+    .team-row + .team-row {
+      border-top: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .team-color {
+      width: 5px;
+      flex-shrink: 0;
+    }
+
+    #team1-color { background: #BE9D04; }
+    #team2-color { background: #5a8cae; }
+
+    .team-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .team-name {
+      color: #f1faee;
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      padding: 14px 16px;
+      text-transform: uppercase;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      transition: padding 0.15s;
+    }
+
+    .team-stats {
+      font-family: 'Arial', sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      color: rgba(241, 250, 238, 0.5);
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      padding: 0 16px 10px;
+    }
+
+    /* ── sets column (volleyball) ─────────────────────────────────────────── */
+
+    .team-sets {
+      color: rgba(241, 250, 238, 0.65);
+      font-size: 18px;
+      font-weight: 700;
+      min-width: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+
+    /* ── score ────────────────────────────────────────────────────────────── */
+
+    .team-score {
+      background: #1a2d3e;
+      color: #f1faee;
+      font-size: 28px;
+      font-weight: 900;
+      min-width: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 18px;
+      letter-spacing: 1px;
+      transition: color 0.2s, background 0.2s;
+    }
+
+    .team-score.bump {
+      color: #BE9D04;
+      background: #2d4f68;
+    }
+
+    /* ── status dot ───────────────────────────────────────────────────────── */
+
+    #status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #555;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    #status-dot.connected    { background: #4caf50; }
+    #status-dot.disconnected { background: #f44336; }
+  </style>
+</head>
+<body>
+  <div id="scoreboard">
+    <div id="title-bar">
+      <span id="status-dot"></span>
+      <span id="title-text">Scoreboard</span>
+      <span id="period-badge" style="display:none"></span>
+    </div>
+
+    <div class="team-row">
+      <div class="team-color" id="team1-color"></div>
+      <div class="team-info">
+        <div class="team-name" id="team1-name">Team 1</div>
+        <div class="team-stats" id="team1-stats" style="display:none"></div>
+      </div>
+      <div class="team-sets" id="team1-sets" style="display:none">0</div>
+      <div class="team-score" id="team1-score">0</div>
+    </div>
+
+    <div class="team-row">
+      <div class="team-color" id="team2-color"></div>
+      <div class="team-info">
+        <div class="team-name" id="team2-name">Team 2</div>
+        <div class="team-stats" id="team2-stats" style="display:none"></div>
+      </div>
+      <div class="team-sets" id="team2-sets" style="display:none">0</div>
+      <div class="team-score" id="team2-score">0</div>
+    </div>
+  </div>
+
+  <script>
+    const WS_URL = 'ws://localhost:8765';
+    const RECONNECT_DELAY = 2000;
+
+    const board       = document.getElementById('scoreboard');
+    const statusDot   = document.getElementById('status-dot');
+    const titleText   = document.getElementById('title-text');
+    const periodBadge = document.getElementById('period-badge');
+    const t1name  = document.getElementById('team1-name');
+    const t2name  = document.getElementById('team2-name');
+    const t1score = document.getElementById('team1-score');
+    const t2score = document.getElementById('team2-score');
+    const t1stats = document.getElementById('team1-stats');
+    const t2stats = document.getElementById('team2-stats');
+    const t1sets  = document.getElementById('team1-sets');
+    const t2sets  = document.getElementById('team2-sets');
+
+    let prevState = null;
+
+    // Surrey Gold badge across all sport modes
+    const BADGE_COLOR = {
+      basketball: '#BE9D04',
+      futsal:     '#BE9D04',
+      volleyball: '#BE9D04',
+    };
+
+    function bump(el) {
+      el.classList.remove('bump');
+      void el.offsetWidth;
+      el.classList.add('bump');
+      setTimeout(() => el.classList.remove('bump'), 600);
+    }
+
+    function show(el) { el.style.display = ''; }
+    function hide(el) { el.style.display = 'none'; }
+
+    function periodLabel(mode, period) {
+      if (mode === 'basketball') {
+        if (period <= 4) return 'Q' + period;
+        if (period === 5) return 'OT';
+        return 'OT' + (period - 4);
+      }
+      if (mode === 'futsal') {
+        if (period === 1) return '1H';
+        if (period === 2) return '2H';
+        if (period === 3) return 'ET';
+        return 'ET' + (period - 2);
+      }
+      if (mode === 'volleyball') return 'SET ' + period;
+      return '';
+    }
+
+    function applyState(state) {
+      const mode = state.mode || 'generic';
+
+      // Title
+      titleText.textContent = state.title || 'Scoreboard';
+
+      // Period badge
+      const label = periodLabel(mode, state.period || 1);
+      if (label) {
+        periodBadge.textContent = label;
+        periodBadge.style.background = BADGE_COLOR[mode] || '#BE9D04';
+        periodBadge.style.color = '#1a2d3e';
+        show(periodBadge);
+      } else {
+        hide(periodBadge);
+      }
+
+      // Team names
+      t1name.textContent = state.team1.name;
+      t2name.textContent = state.team2.name;
+
+      // Scores + bump animation
+      const s1 = String(state.team1.score);
+      const s2 = String(state.team2.score);
+      if (prevState && s1 !== String(prevState.team1.score)) bump(t1score);
+      if (prevState && s2 !== String(prevState.team2.score)) bump(t2score);
+      t1score.textContent = s1;
+      t2score.textContent = s2;
+
+      // Stats row — basketball and futsal
+      const showStats = mode === 'basketball' || mode === 'futsal';
+      if (showStats) {
+        const f1  = state.team1.fouls    ?? 0;
+        const f2  = state.team2.fouls    ?? 0;
+        const to1 = state.team1.timeouts ?? 0;
+        const to2 = state.team2.timeouts ?? 0;
+        t1stats.textContent = `FOULS: ${f1}  ·  TO: ${to1}`;
+        t2stats.textContent = `FOULS: ${f2}  ·  TO: ${to2}`;
+        show(t1stats); show(t2stats);
+        t1name.style.paddingBottom = '4px';
+        t2name.style.paddingBottom = '4px';
+      } else {
+        hide(t1stats); hide(t2stats);
+        t1name.style.paddingBottom = '';
+        t2name.style.paddingBottom = '';
+      }
+
+      // Sets column — volleyball
+      const showSets = mode === 'volleyball';
+      t1sets.textContent = String(state.team1.sets ?? 0);
+      t2sets.textContent = String(state.team2.sets ?? 0);
+      if (showSets) { show(t1sets); show(t2sets); }
+      else          { hide(t1sets); hide(t2sets); }
+
+      // Board visibility
+      board.classList.toggle('visible', state.visible !== false);
+
+      prevState = JSON.parse(JSON.stringify(state));
+    }
+
+    function connect() {
+      const ws = new WebSocket(WS_URL);
+      ws.onopen = () => { statusDot.className = 'connected'; };
+      ws.onmessage = (evt) => {
+        try { applyState(JSON.parse(evt.data)); }
+        catch (e) { console.error('Bad message', e); }
+      };
+      ws.onclose = () => {
+        statusDot.className = 'disconnected';
+        setTimeout(connect, RECONNECT_DELAY);
+      };
+      ws.onerror = () => { ws.close(); };
+    }
+
+    connect();
+  </script>
+</body>
+</html>

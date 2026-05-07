@@ -1,0 +1,20 @@
+{
+  "mode": "generic",
+  "title": "hellofwiqnf",
+  "team1": {
+    "name": "Hello",
+    "score": 0,
+    "fouls": 0,
+    "timeouts": 0,
+    "sets": 0
+  },
+  "team2": {
+    "name": "World",
+    "score": 0,
+    "fouls": 0,
+    "timeouts": 0,
+    "sets": 0
+  },
+  "period": 1,
+  "visible": true
+}
