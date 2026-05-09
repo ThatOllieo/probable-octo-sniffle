@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scoreboard Control</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg:      #0d1b27;
+      --card:    #1a2d3e;
+      --card2:   #253849;
+      --border:  rgba(255,255,255,0.08);
+      --gold:    #BE9D04;
+      --gold-bg: rgba(190,157,4,0.15);
+      --blue:    #5a8cae;
+      --text:    #f1faee;
+      --muted:   rgba(241,250,238,0.45);
+      --danger:  #c0392b;
+      --green:   #4caf50;
+      --r: 6px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Arial', sans-serif;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    /* ── Layout ───────────────────────────────────────────────────────────── */
+
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--r);
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .label {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 2px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 0 8px;
+    }
+
+    .header h1 {
+      font-family: 'Arial Black', 'Arial', sans-serif;
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    #status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #555;
+      flex-shrink: 0;
+      transition: background 0.3s;
+    }
+    #status-dot.connected    { background: var(--green); }
+    #status-dot.disconnected { background: var(--danger); }
+
+    /* ── Buttons ──────────────────────────────────────────────────────────── */
+
+    button {
+      background: var(--card2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s, color 0.12s;
+      white-space: nowrap;
+      font-family: 'Arial', sans-serif;
+      line-height: 1;
+    }
+    button:hover:not(:disabled)  { background: #2d4f68; border-color: var(--blue); }
+    button:active:not(:disabled) { transform: scale(0.97); }
+    button:disabled { opacity: 0.35; cursor: default; }
+
+    button.active  { background: var(--gold-bg); border-color: var(--gold); color: var(--gold); }
+    button.primary { background: var(--gold-bg); border-color: var(--gold); color: var(--gold); }
+    button.primary:hover:not(:disabled) { background: rgba(190,157,4,0.3); }
+    button.danger  { border-color: rgba(192,57,43,0.5); color: #e07060; }
+    button.danger:hover:not(:disabled)  { background: rgba(192,57,43,0.2); border-color: var(--danger); }
+
+    /* ── Inputs ───────────────────────────────────────────────────────────── */
+
+    input[type="text"] {
+      background: var(--card2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: 'Arial', sans-serif;
+      flex: 1;
+      min-width: 80px;
+      transition: border-color 0.12s;
+    }
+    input[type="text"]:focus { outline: none; border-color: var(--gold); }
+    input[type="text"]::placeholder { color: var(--muted); }
+
+    /* ── Top bar ──────────────────────────────────────────────────────────── */
+
+    .top-bar {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .top-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .corner-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+    }
+    .corner-grid button { padding: 6px 10px; font-size: 16px; }
+
+    /* ── Teams ────────────────────────────────────────────────────────────── */
+
+    .teams-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .team-card {
+      background: var(--card);
+      border-radius: var(--r);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .team-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: var(--card2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .team-pip {
+      width: 5px;
+      height: 18px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .team-head .label { margin: 0; }
+
+    .team-body {
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* ── Score control ────────────────────────────────────────────────────── */
+
+    .score-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .score-num {
+      font-family: 'Arial Black', 'Arial', sans-serif;
+      font-size: 48px;
+      font-weight: 900;
+      min-width: 70px;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .score-wrap button {
+      font-size: 26px;
+      padding: 4px 14px;
+      font-weight: 900;
+    }
+
+    /* ── Stat rows (fouls / timeouts / sets) ──────────────────────────────── */
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      text-transform: uppercase;
+      width: 68px;
+      flex-shrink: 0;
+    }
+
+    .stat-val {
+      font-family: 'Arial Black', 'Arial', sans-serif;
+      font-size: 22px;
+      font-weight: 900;
+      min-width: 34px;
+      text-align: center;
+    }
+
+    .stat-row button { padding: 5px 11px; font-size: 16px; }
+
+    /* ── Period display ───────────────────────────────────────────────────── */
+
+    .period-num {
+      font-family: 'Arial Black', 'Arial', sans-serif;
+      font-size: 26px;
+      font-weight: 900;
+      min-width: 80px;
+      text-align: center;
+      padding: 7px 16px;
+      border-radius: 4px;
+      background: var(--gold-bg);
+      border: 1px solid var(--gold);
+      color: var(--gold);
+    }
+
+    .period-wrap { display: flex; align-items: center; gap: 8px; }
+    .period-wrap button { font-size: 18px; padding: 6px 12px; }
+
+    /* ── Visibility ───────────────────────────────────────────────────────── */
+
+    .toggle-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ── Utility ──────────────────────────────────────────────────────────── */
+
+    .hidden { display: none !important; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 4px 0;
+    }
+
+    @media (max-width: 580px) {
+      .teams-grid { grid-template-columns: 1fr; }
+      .top-bar    { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div id="status-dot"></div>
+    <h1>Scoreboard Control</h1>
+  </div>
+
+  <!-- Mode + Board + Corner -->
+  <div class="card">
+    <div class="top-bar">
+
+      <div class="top-group" style="flex:1; min-width:220px">
+        <div class="label">Sport mode</div>
+        <div class="row">
+          <button class="mode-btn" data-mode="generic"     onclick="send('mode generic')">Generic</button>
+          <button class="mode-btn" data-mode="basketball"  onclick="send('mode basketball')">Basketball</button>
+          <button class="mode-btn" data-mode="futsal"      onclick="send('mode futsal')">Futsal</button>
+          <button class="mode-btn" data-mode="volleyball"  onclick="send('mode volleyball')">Volleyball</button>
+        </div>
+      </div>
+
+      <div class="top-group">
+        <div class="label">Scoreboard</div>
+        <div class="row">
+          <button id="show-btn" onclick="send('show')">Show</button>
+          <button id="hide-btn" onclick="send('hide')">Hide</button>
+        </div>
+      </div>
+
+      <div class="top-group">
+        <div class="label">Corner</div>
+        <div class="corner-grid">
+          <button class="corner-btn" data-corner="tl" onclick="send('corner tl')">↖</button>
+          <button class="corner-btn" data-corner="tr" onclick="send('corner tr')">↗</button>
+          <button class="corner-btn" data-corner="bl" onclick="send('corner bl')">↙</button>
+          <button class="corner-btn" data-corner="br" onclick="send('corner br')">↘</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Title -->
+  <div class="card">
+    <div class="col">
+      <div class="label">Title</div>
+      <div class="row">
+        <input type="text" id="title-input" placeholder="Scoreboard title…" />
+        <button onclick="setTitle()">Set</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Teams -->
+  <div class="teams-grid">
+
+    <!-- Team 1 -->
+    <div class="team-card">
+      <div class="team-head">
+        <div class="team-pip" style="background:#BE9D04"></div>
+        <div class="label">Team 1</div>
+      </div>
+      <div class="team-body">
+
+        <div class="row">
+          <input type="text" id="t1-name" placeholder="Team 1" />
+          <button onclick="setName(1)">Set</button>
+        </div>
+
+        <div class="score-wrap">
+          <button onclick="send('-1')">−</button>
+          <div class="score-num" id="t1-score">0</div>
+          <button onclick="send('+1')">+</button>
+        </div>
+
+        <div class="row bball-only hidden">
+          <button onclick="send('ft1')">FT +1</button>
+          <button onclick="send('2p1')">2P +2</button>
+          <button onclick="send('3p1')">3P +3</button>
+        </div>
+
+        <div class="stats-only hidden">
+          <div class="stat-row">
+            <div class="stat-label">Fouls</div>
+            <button onclick="changeFouls(1,-1)">−</button>
+            <div class="stat-val" id="t1-fouls">0</div>
+            <button onclick="send('+f1')">+</button>
+          </div>
+          <div class="stat-row" style="margin-top:8px">
+            <div class="stat-label">Timeouts</div>
+            <button onclick="send('-t1')">Use</button>
+            <div class="stat-val" id="t1-timeouts">0</div>
+            <button onclick="changeTimeouts(1,1)">+</button>
+          </div>
+        </div>
+
+        <div class="volleyball-only hidden">
+          <div class="stat-row">
+            <div class="stat-label">Sets won</div>
+            <button onclick="changeSets(1,-1)">−</button>
+            <div class="stat-val" id="t1-sets">0</div>
+            <button onclick="changeSets(1,1)">+</button>
+          </div>
+          <button class="primary" style="margin-top:8px;width:100%" onclick="send('winset 1')">Win this set</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Team 2 -->
+    <div class="team-card">
+      <div class="team-head">
+        <div class="team-pip" style="background:#5a8cae"></div>
+        <div class="label">Team 2</div>
+      </div>
+      <div class="team-body">
+
+        <div class="row">
+          <input type="text" id="t2-name" placeholder="Team 2" />
+          <button onclick="setName(2)">Set</button>
+        </div>
+
+        <div class="score-wrap">
+          <button onclick="send('-2')">−</button>
+          <div class="score-num" id="t2-score">0</div>
+          <button onclick="send('+2')">+</button>
+        </div>
+
+        <div class="row bball-only hidden">
+          <button onclick="send('ft2')">FT +1</button>
+          <button onclick="send('2p2')">2P +2</button>
+          <button onclick="send('3p2')">3P +3</button>
+        </div>
+
+        <div class="stats-only hidden">
+          <div class="stat-row">
+            <div class="stat-label">Fouls</div>
+            <button onclick="changeFouls(2,-1)">−</button>
+            <div class="stat-val" id="t2-fouls">0</div>
+            <button onclick="send('+f2')">+</button>
+          </div>
+          <div class="stat-row" style="margin-top:8px">
+            <div class="stat-label">Timeouts</div>
+            <button onclick="send('-t2')">Use</button>
+            <div class="stat-val" id="t2-timeouts">0</div>
+            <button onclick="changeTimeouts(2,1)">+</button>
+          </div>
+        </div>
+
+        <div class="volleyball-only hidden">
+          <div class="stat-row">
+            <div class="stat-label">Sets won</div>
+            <button onclick="changeSets(2,-1)">−</button>
+            <div class="stat-val" id="t2-sets">0</div>
+            <button onclick="changeSets(2,1)">+</button>
+          </div>
+          <button class="primary" style="margin-top:8px;width:100%" onclick="send('winset 2')">Win this set</button>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Period + Resets -->
+  <div class="card">
+    <div class="top-bar">
+
+      <div class="top-group">
+        <div class="label" id="period-label-text">Period</div>
+        <div class="period-wrap">
+          <button onclick="prevPeriod()">◄</button>
+          <div class="period-num" id="period-display">P1</div>
+          <button onclick="send('np')">►</button>
+        </div>
+      </div>
+
+      <div class="top-group" style="flex:1">
+        <div class="label">Reset</div>
+        <div class="row">
+          <button class="danger" onclick="confirmReset()">Reset all</button>
+          <button class="danger stats-only hidden" id="reset-fouls-btn" onclick="send('resetfouls')">Reset fouls</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Visibility toggles -->
+  <div class="card">
+    <div class="col">
+      <div class="label">Element visibility</div>
+      <div class="toggle-row">
+        <button id="period-toggle"   onclick="toggleEl('period')">Period badge: ON</button>
+        <button id="fouls-toggle"    class="stats-only hidden" onclick="toggleEl('fouls')">Fouls: ON</button>
+        <button id="timeouts-toggle" class="stats-only hidden" onclick="toggleEl('timeouts')">Timeouts: ON</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const WS_URL = 'ws://localhost:8765';
+  const RECONNECT  = 2000;
+
+  let ws = null;
+  let cur = null;  // current state
+
+  // ── Connection ─────────────────────────────────────────────────────────────
+
+  function connect() {
+    ws = new WebSocket(WS_URL);
+    const dot = document.getElementById('status-dot');
+
+    ws.onopen    = () => { dot.className = 'connected'; };
+    ws.onmessage = (e) => { try { applyState(JSON.parse(e.data)); } catch {} };
+    ws.onclose   = () => { dot.className = 'disconnected'; setTimeout(connect, RECONNECT); };
+    ws.onerror   = () => ws.close();
+  }
+
+  function send(cmd) {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(cmd);
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+
+  function vis(selector, show) {
+    document.querySelectorAll(selector).forEach(el => el.classList.toggle('hidden', !show));
+  }
+
+  function periodLabel(mode, period) {
+    if (mode === 'basketball') {
+      if (period <= 4) return 'Q' + period;
+      if (period === 5) return 'OT';
+      return 'OT' + (period - 4);
+    }
+    if (mode === 'futsal') {
+      if (period === 1) return '1H';
+      if (period === 2) return '2H';
+      if (period === 3) return 'ET';
+      return 'ET' + (period - 2);
+    }
+    if (mode === 'volleyball') return 'Set ' + period;
+    return 'P' + period;
+  }
+
+  // ── State → UI ─────────────────────────────────────────────────────────────
+
+  function applyState(s) {
+    cur = s;
+    const mode = s.mode || 'generic';
+
+    // Mode buttons
+    document.querySelectorAll('.mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === mode));
+
+    // Board show/hide
+    document.getElementById('show-btn').classList.toggle('active', s.visible !== false);
+    document.getElementById('hide-btn').classList.toggle('active', s.visible === false);
+
+    // Corner
+    document.querySelectorAll('.corner-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.corner === (s.corner || 'br')));
+
+    // Title — don't overwrite while the user is typing
+    const titleEl = document.getElementById('title-input');
+    if (document.activeElement !== titleEl)
+      titleEl.placeholder = s.title || 'Scoreboard title…';
+
+    // Team names
+    const n1 = document.getElementById('t1-name');
+    const n2 = document.getElementById('t2-name');
+    if (document.activeElement !== n1) n1.placeholder = s.team1.name || 'Team 1';
+    if (document.activeElement !== n2) n2.placeholder = s.team2.name || 'Team 2';
+
+    // Scores
+    document.getElementById('t1-score').textContent = s.team1.score;
+    document.getElementById('t2-score').textContent = s.team2.score;
+
+    // Period
+    document.getElementById('period-display').textContent = periodLabel(mode, s.period || 1);
+    const pLabelMap = { basketball:'Quarter', futsal:'Half', volleyball:'Set' };
+    document.getElementById('period-label-text').textContent = pLabelMap[mode] || 'Period';
+
+    // Fouls / timeouts / sets
+    document.getElementById('t1-fouls').textContent    = s.team1.fouls    ?? 0;
+    document.getElementById('t2-fouls').textContent    = s.team2.fouls    ?? 0;
+    document.getElementById('t1-timeouts').textContent = s.team1.timeouts ?? 0;
+    document.getElementById('t2-timeouts').textContent = s.team2.timeouts ?? 0;
+    document.getElementById('t1-sets').textContent     = s.team1.sets     ?? 0;
+    document.getElementById('t2-sets').textContent     = s.team2.sets     ?? 0;
+
+    // Mode-specific sections
+    vis('.bball-only',     mode === 'basketball');
+    vis('.stats-only',     mode === 'basketball' || mode === 'futsal');
+    vis('.volleyball-only', mode === 'volleyball');
+
+    // Visibility toggles
+    const sp = s.show_period   !== false;
+    const sf = s.show_fouls    !== false;
+    const st = s.show_timeouts !== false;
+
+    setToggle('period-toggle',   'Period badge', sp);
+    setToggle('fouls-toggle',    'Fouls',        sf);
+    setToggle('timeouts-toggle', 'Timeouts',     st);
+  }
+
+  function setToggle(id, label, on) {
+    const el = document.getElementById(id);
+    el.textContent = `${label}: ${on ? 'ON' : 'OFF'}`;
+    el.classList.toggle('active', on);
+  }
+
+  // ── Button handlers ────────────────────────────────────────────────────────
+
+  function setTitle() {
+    const el = document.getElementById('title-input');
+    const v  = el.value.trim();
+    if (v) { send('title ' + v); el.value = ''; }
+  }
+
+  function setName(t) {
+    const el = document.getElementById('t' + t + '-name');
+    const v  = el.value.trim();
+    if (v) { send(t + ' ' + v); el.value = ''; }
+  }
+
+  function changeFouls(t, d) {
+    const n = Math.max(0, (cur?.['team' + t]?.fouls ?? 0) + d);
+    send('f' + t + ' ' + n);
+  }
+
+  function changeTimeouts(t, d) {
+    const n = Math.max(0, (cur?.['team' + t]?.timeouts ?? 0) + d);
+    send('t' + t + ' ' + n);
+  }
+
+  function changeSets(t, d) {
+    const n = Math.max(0, (cur?.['team' + t]?.sets ?? 0) + d);
+    send('sets' + t + ' ' + n);
+  }
+
+  function prevPeriod() {
+    const p = cur?.period ?? 1;
+    if (p > 1) send('period ' + (p - 1));
+  }
+
+  function toggleEl(which) {
+    const map = {
+      period:   [cur?.show_period   !== false, 'showperiod',   'hideperiod'],
+      fouls:    [cur?.show_fouls    !== false, 'showfouls',    'hidefouls'],
+      timeouts: [cur?.show_timeouts !== false, 'showtimeouts', 'hidetimeouts'],
+    };
+    const [on, showCmd, hideCmd] = map[which];
+    send(on ? hideCmd : showCmd);
+  }
+
+  function confirmReset() {
+    if (confirm('Reset scores, period, fouls and timeouts to defaults?')) send('reset');
+  }
+
+  // Enter key support for text inputs
+  document.getElementById('title-input').addEventListener('keydown', e => { if (e.key === 'Enter') setTitle(); });
+  document.getElementById('t1-name').addEventListener('keydown',     e => { if (e.key === 'Enter') setName(1); });
+  document.getElementById('t2-name').addEventListener('keydown',     e => { if (e.key === 'Enter') setName(2); });
+
+  connect();
+</script>
+</body>
+</html>

@@ -4,7 +4,7 @@ Scoreboard WebSocket server — Generic, Basketball, Futsal, and Volleyball mode
 Persists state to scores.json — survives restarts.
 
 Usage: python server.py
-Then open scoreboard.html in a browser (or in OBS as a browser source).
+Then open scoreboard.html in OBS (or a browser) and control.html in a browser.
 
 ─── General ──────────────────────────────────────────────────────────────────
   1 <name>           set team 1 name
@@ -77,7 +77,6 @@ SCORES_FILE = os.path.join(os.path.dirname(__file__), "scores.json")
 HOST = "localhost"
 PORT = 8765
 
-# Default timeouts awarded when switching into a mode
 MODE_DEFAULTS = {
     "generic":    {"timeouts": 0, "fouls": 0, "sets": 0},
     "basketball": {"timeouts": 5, "fouls": 0, "sets": 0},
@@ -152,8 +151,10 @@ async def handler(websocket) -> None:
     connected.add(websocket)
     try:
         await websocket.send(json.dumps(state))
-        async for _ in websocket:
-            pass
+        async for message in websocket:
+            if process_command(message):
+                save_state(state)
+                await broadcast(state)
     except websockets.exceptions.ConnectionClosed:
         pass
     finally:
@@ -205,11 +206,160 @@ def print_state(s: dict) -> None:
     print()
 
 
+# ── command processing ────────────────────────────────────────────────────────
+
+def process_command(raw: str) -> bool:
+    """Execute a command string, mutating state in place. Returns True if state changed."""
+    parts = raw.strip().split(None, 1)
+    if not parts:
+        return False
+
+    cmd     = parts[0].lower()
+    arg     = parts[1] if len(parts) > 1 else ""
+    changed = True
+
+    try:
+        if cmd == "help":
+            print(__doc__)
+            changed = False
+
+        elif cmd == "state":
+            print_state(state)
+            changed = False
+
+        # ── team names ────────────────────────────────────────────────
+        elif cmd == "1":
+            if not arg: print("Usage: 1 <name>"); changed = False
+            else: state["team1"]["name"] = arg
+        elif cmd == "2":
+            if not arg: print("Usage: 2 <name>"); changed = False
+            else: state["team2"]["name"] = arg
+
+        # ── scores ────────────────────────────────────────────────────
+        elif cmd == "s1": state["team1"]["score"] = int(arg)
+        elif cmd == "s2": state["team2"]["score"] = int(arg)
+        elif cmd == "+1":
+            n = int(arg) if arg else 1
+            state["team1"]["score"] = clamp(state["team1"]["score"] + n)
+        elif cmd == "+2":
+            n = int(arg) if arg else 1
+            state["team2"]["score"] = clamp(state["team2"]["score"] + n)
+        elif cmd == "-1":
+            n = int(arg) if arg else 1
+            state["team1"]["score"] = clamp(state["team1"]["score"] - n)
+        elif cmd == "-2":
+            n = int(arg) if arg else 1
+            state["team2"]["score"] = clamp(state["team2"]["score"] - n)
+
+        # ── basketball scoring shortcuts ──────────────────────────────
+        elif cmd == "ft1": state["team1"]["score"] = clamp(state["team1"]["score"] + 1)
+        elif cmd == "ft2": state["team2"]["score"] = clamp(state["team2"]["score"] + 1)
+        elif cmd == "2p1": state["team1"]["score"] = clamp(state["team1"]["score"] + 2)
+        elif cmd == "2p2": state["team2"]["score"] = clamp(state["team2"]["score"] + 2)
+        elif cmd == "3p1": state["team1"]["score"] = clamp(state["team1"]["score"] + 3)
+        elif cmd == "3p2": state["team2"]["score"] = clamp(state["team2"]["score"] + 3)
+
+        # ── mode ──────────────────────────────────────────────────────
+        elif cmd == "mode":
+            new_mode = arg.lower().strip()
+            if new_mode not in MODE_DEFAULTS:
+                print(f"Unknown mode. Choose: {', '.join(MODE_DEFAULTS)}")
+                changed = False
+            else:
+                defs = MODE_DEFAULTS[new_mode]
+                state["mode"]   = new_mode
+                state["period"] = 1
+                for t in ("team1", "team2"):
+                    state[t]["score"]    = 0
+                    state[t]["fouls"]    = defs["fouls"]
+                    state[t]["timeouts"] = defs["timeouts"]
+                    state[t]["sets"]     = defs["sets"]
+
+        # ── period ────────────────────────────────────────────────────
+        elif cmd in ("period", "quarter", "half", "set"):
+            state["period"] = int(arg)
+        elif cmd in ("np", "nextperiod"):
+            state["period"] = state.get("period", 1) + 1
+
+        # ── fouls ─────────────────────────────────────────────────────
+        elif cmd == "+f1":
+            n = int(arg) if arg else 1
+            state["team1"]["fouls"] = clamp(state["team1"].get("fouls", 0) + n)
+        elif cmd == "+f2":
+            n = int(arg) if arg else 1
+            state["team2"]["fouls"] = clamp(state["team2"].get("fouls", 0) + n)
+        elif cmd == "f1": state["team1"]["fouls"] = int(arg)
+        elif cmd == "f2": state["team2"]["fouls"] = int(arg)
+        elif cmd == "resetfouls":
+            state["team1"]["fouls"] = 0
+            state["team2"]["fouls"] = 0
+
+        # ── timeouts ──────────────────────────────────────────────────
+        elif cmd == "-t1":
+            state["team1"]["timeouts"] = clamp(state["team1"].get("timeouts", 0) - 1)
+        elif cmd == "-t2":
+            state["team2"]["timeouts"] = clamp(state["team2"].get("timeouts", 0) - 1)
+        elif cmd == "t1": state["team1"]["timeouts"] = int(arg)
+        elif cmd == "t2": state["team2"]["timeouts"] = int(arg)
+
+        # ── volleyball sets ───────────────────────────────────────────
+        elif cmd == "winset":
+            team = int(arg)
+            if team not in (1, 2):
+                print("Usage: winset 1  or  winset 2"); changed = False
+            else:
+                state[f"team{team}"]["sets"] = state[f"team{team}"].get("sets", 0) + 1
+                state["team1"]["score"] = 0
+                state["team2"]["score"] = 0
+                state["period"] = state.get("period", 1) + 1
+        elif cmd == "sets1": state["team1"]["sets"] = int(arg)
+        elif cmd == "sets2": state["team2"]["sets"] = int(arg)
+
+        # ── corner / element visibility ───────────────────────────────
+        elif cmd == "corner":
+            if arg not in ("tl", "tr", "bl", "br"):
+                print("Usage: corner <tl|tr|bl|br>"); changed = False
+            else:
+                state["corner"] = arg
+        elif cmd == "showperiod":   state["show_period"] = True
+        elif cmd == "hideperiod":   state["show_period"] = False
+        elif cmd == "showfouls":    state["show_fouls"] = True
+        elif cmd == "hidefouls":    state["show_fouls"] = False
+        elif cmd == "showtimeouts": state["show_timeouts"] = True
+        elif cmd == "hidetimeouts": state["show_timeouts"] = False
+
+        # ── title / visibility / reset ────────────────────────────────
+        elif cmd == "title":
+            if not arg: print("Usage: title <text>"); changed = False
+            else: state["title"] = arg
+        elif cmd == "show":  state["visible"] = True
+        elif cmd == "hide":  state["visible"] = False
+        elif cmd == "reset":
+            defs = MODE_DEFAULTS[state.get("mode", "generic")]
+            state["period"] = 1
+            for t in ("team1", "team2"):
+                state[t]["score"]    = 0
+                state[t]["fouls"]    = defs["fouls"]
+                state[t]["timeouts"] = defs["timeouts"]
+                state[t]["sets"]     = defs["sets"]
+
+        else:
+            print(f"Unknown command: {cmd!r}. Type 'help' for commands.")
+            changed = False
+
+    except ValueError:
+        print(f"Invalid number: {arg!r}")
+        changed = False
+
+    return changed
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 async def cli(loop: asyncio.AbstractEventLoop) -> None:
     print(f"\nScoreboard server running on ws://{HOST}:{PORT}")
     print(f"State file: {SCORES_FILE}")
+    print(f"Control panel: open control.html in a browser")
     print('Type "help" for commands.\n')
     print_state(state)
 
@@ -220,148 +370,7 @@ async def cli(loop: asyncio.AbstractEventLoop) -> None:
             print("\nShutting down.")
             break
 
-        parts = raw.strip().split(None, 1)
-        if not parts:
-            continue
-
-        cmd     = parts[0].lower()
-        arg     = parts[1] if len(parts) > 1 else ""
-        changed = True
-
-        try:
-            if cmd == "help":
-                print(__doc__)
-                changed = False
-
-            elif cmd == "state":
-                print_state(state)
-                changed = False
-
-            # ── team names ────────────────────────────────────────────────
-            elif cmd == "1":
-                if not arg: print("Usage: 1 <name>"); changed = False
-                else: state["team1"]["name"] = arg
-            elif cmd == "2":
-                if not arg: print("Usage: 2 <name>"); changed = False
-                else: state["team2"]["name"] = arg
-
-            # ── scores ────────────────────────────────────────────────────
-            elif cmd == "s1": state["team1"]["score"] = int(arg)
-            elif cmd == "s2": state["team2"]["score"] = int(arg)
-            elif cmd == "+1":
-                n = int(arg) if arg else 1
-                state["team1"]["score"] = clamp(state["team1"]["score"] + n)
-            elif cmd == "+2":
-                n = int(arg) if arg else 1
-                state["team2"]["score"] = clamp(state["team2"]["score"] + n)
-            elif cmd == "-1":
-                n = int(arg) if arg else 1
-                state["team1"]["score"] = clamp(state["team1"]["score"] - n)
-            elif cmd == "-2":
-                n = int(arg) if arg else 1
-                state["team2"]["score"] = clamp(state["team2"]["score"] - n)
-
-            # ── basketball scoring shortcuts ──────────────────────────────
-            elif cmd == "ft1": state["team1"]["score"] = clamp(state["team1"]["score"] + 1)
-            elif cmd == "ft2": state["team2"]["score"] = clamp(state["team2"]["score"] + 1)
-            elif cmd == "2p1": state["team1"]["score"] = clamp(state["team1"]["score"] + 2)
-            elif cmd == "2p2": state["team2"]["score"] = clamp(state["team2"]["score"] + 2)
-            elif cmd == "3p1": state["team1"]["score"] = clamp(state["team1"]["score"] + 3)
-            elif cmd == "3p2": state["team2"]["score"] = clamp(state["team2"]["score"] + 3)
-
-            # ── mode ──────────────────────────────────────────────────────
-            elif cmd == "mode":
-                new_mode = arg.lower().strip()
-                if new_mode not in MODE_DEFAULTS:
-                    print(f"Unknown mode. Choose: {', '.join(MODE_DEFAULTS)}")
-                    changed = False
-                else:
-                    defs = MODE_DEFAULTS[new_mode]
-                    state["mode"]   = new_mode
-                    state["period"] = 1
-                    for t in ("team1", "team2"):
-                        state[t]["score"]    = 0
-                        state[t]["fouls"]    = defs["fouls"]
-                        state[t]["timeouts"] = defs["timeouts"]
-                        state[t]["sets"]     = defs["sets"]
-
-            # ── period ────────────────────────────────────────────────────
-            elif cmd in ("period", "quarter", "half", "set"):
-                state["period"] = int(arg)
-            elif cmd in ("np", "nextperiod"):
-                state["period"] = state.get("period", 1) + 1
-
-            # ── fouls ─────────────────────────────────────────────────────
-            elif cmd == "+f1":
-                n = int(arg) if arg else 1
-                state["team1"]["fouls"] = clamp(state["team1"].get("fouls", 0) + n)
-            elif cmd == "+f2":
-                n = int(arg) if arg else 1
-                state["team2"]["fouls"] = clamp(state["team2"].get("fouls", 0) + n)
-            elif cmd == "f1": state["team1"]["fouls"] = int(arg)
-            elif cmd == "f2": state["team2"]["fouls"] = int(arg)
-            elif cmd == "resetfouls":
-                state["team1"]["fouls"] = 0
-                state["team2"]["fouls"] = 0
-
-            # ── timeouts ──────────────────────────────────────────────────
-            elif cmd == "-t1":
-                state["team1"]["timeouts"] = clamp(state["team1"].get("timeouts", 0) - 1)
-            elif cmd == "-t2":
-                state["team2"]["timeouts"] = clamp(state["team2"].get("timeouts", 0) - 1)
-            elif cmd == "t1": state["team1"]["timeouts"] = int(arg)
-            elif cmd == "t2": state["team2"]["timeouts"] = int(arg)
-
-            # ── volleyball sets ───────────────────────────────────────────
-            elif cmd == "winset":
-                team = int(arg)
-                if team not in (1, 2):
-                    print("Usage: winset 1  or  winset 2"); changed = False
-                else:
-                    state[f"team{team}"]["sets"] = state[f"team{team}"].get("sets", 0) + 1
-                    state["team1"]["score"] = 0
-                    state["team2"]["score"] = 0
-                    state["period"] = state.get("period", 1) + 1
-            elif cmd == "sets1": state["team1"]["sets"] = int(arg)
-            elif cmd == "sets2": state["team2"]["sets"] = int(arg)
-
-            # ── corner / element visibility ───────────────────────────────
-            elif cmd == "corner":
-                if arg not in ("tl", "tr", "bl", "br"):
-                    print("Usage: corner <tl|tr|bl|br>"); changed = False
-                else:
-                    state["corner"] = arg
-            elif cmd == "showperiod":   state["show_period"] = True
-            elif cmd == "hideperiod":   state["show_period"] = False
-            elif cmd == "showfouls":    state["show_fouls"] = True
-            elif cmd == "hidefouls":    state["show_fouls"] = False
-            elif cmd == "showtimeouts": state["show_timeouts"] = True
-            elif cmd == "hidetimeouts": state["show_timeouts"] = False
-
-            # ── title / visibility / reset ────────────────────────────────
-            elif cmd == "title":
-                if not arg: print("Usage: title <text>"); changed = False
-                else: state["title"] = arg
-            elif cmd == "show":  state["visible"] = True
-            elif cmd == "hide":  state["visible"] = False
-            elif cmd == "reset":
-                defs = MODE_DEFAULTS[state.get("mode", "generic")]
-                state["period"] = 1
-                for t in ("team1", "team2"):
-                    state[t]["score"]    = 0
-                    state[t]["fouls"]    = defs["fouls"]
-                    state[t]["timeouts"] = defs["timeouts"]
-                    state[t]["sets"]     = defs["sets"]
-
-            else:
-                print(f"Unknown command: {cmd!r}. Type 'help' for commands.")
-                changed = False
-
-        except ValueError:
-            print(f"Invalid number: {arg!r}")
-            changed = False
-
-        if changed:
+        if process_command(raw):
             save_state(state)
             await broadcast(state)
             print_state(state)
