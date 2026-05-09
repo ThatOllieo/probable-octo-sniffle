@@ -17,8 +17,6 @@
 
     #scoreboard {
       position: absolute;
-      bottom: 40px;
-      right: 40px;
       display: flex;
       flex-direction: column;
       align-items: stretch;
@@ -27,7 +25,7 @@
       overflow: hidden;
       box-shadow: 0 4px 32px rgba(0,0,0,0.7);
       opacity: 0;
-      transform: translateY(10px);
+      transform: translateY(var(--slide-y, 10px));
       transition: opacity 0.4s ease, transform 0.4s ease;
     }
 
@@ -35,6 +33,13 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    /* ── corner positioning ───────────────────────────────────────────────── */
+
+    #scoreboard.corner-br { bottom: 40px; right: 40px; --slide-y:  10px; }
+    #scoreboard.corner-bl { bottom: 40px; left:  40px; --slide-y:  10px; }
+    #scoreboard.corner-tr { top:    40px; right: 40px; --slide-y: -10px; }
+    #scoreboard.corner-tl { top:    40px; left:  40px; --slide-y: -10px; }
 
     /* ── title bar ────────────────────────────────────────────────────────── */
 
@@ -170,7 +175,7 @@
   </style>
 </head>
 <body>
-  <div id="scoreboard">
+  <div id="scoreboard" class="corner-br">
     <div id="title-bar">
       <span id="status-dot"></span>
       <span id="title-text">Scoreboard</span>
@@ -253,12 +258,17 @@
     function applyState(state) {
       const mode = state.mode || 'generic';
 
+      // Corner
+      board.classList.remove('corner-br', 'corner-bl', 'corner-tr', 'corner-tl');
+      board.classList.add('corner-' + (state.corner || 'br'));
+
       // Title
       titleText.textContent = state.title || 'Scoreboard';
 
       // Period badge
+      const showPeriod = state.show_period !== false;
       const label = periodLabel(mode, state.period || 1);
-      if (label) {
+      if (label && showPeriod) {
         periodBadge.textContent = label;
         periodBadge.style.background = BADGE_COLOR[mode] || '#BE9D04';
         periodBadge.style.color = '#1a2d3e';
@@ -279,15 +289,20 @@
       t1score.textContent = s1;
       t2score.textContent = s2;
 
-      // Stats row — basketball and futsal
+      // Stats row — basketball and futsal, with per-element toggles
       const showStats = mode === 'basketball' || mode === 'futsal';
-      if (showStats) {
+      const showFouls    = state.show_fouls    !== false;
+      const showTimeouts = state.show_timeouts !== false;
+      if (showStats && (showFouls || showTimeouts)) {
         const f1  = state.team1.fouls    ?? 0;
         const f2  = state.team2.fouls    ?? 0;
         const to1 = state.team1.timeouts ?? 0;
         const to2 = state.team2.timeouts ?? 0;
-        t1stats.textContent = `FOULS: ${f1}  ·  TO: ${to1}`;
-        t2stats.textContent = `FOULS: ${f2}  ·  TO: ${to2}`;
+        const p1 = [], p2 = [];
+        if (showFouls)    { p1.push(`FOULS: ${f1}`);  p2.push(`FOULS: ${f2}`); }
+        if (showTimeouts) { p1.push(`TO: ${to1}`);    p2.push(`TO: ${to2}`); }
+        t1stats.textContent = p1.join('  ·  ');
+        t2stats.textContent = p2.join('  ·  ');
         show(t1stats); show(t2stats);
         t1name.style.paddingBottom = '4px';
         t2name.style.paddingBottom = '4px';

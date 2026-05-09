@@ -1,18 +1,22 @@
 {
-  "mode": "generic",
+  "mode": "basketball",
   "title": "hellofwiqnf",
+  "corner": "br",
+  "show_period": true,
+  "show_fouls": true,
+  "show_timeouts": true,
   "team1": {
     "name": "Hello",
     "score": 0,
     "fouls": 0,
-    "timeouts": 0,
+    "timeouts": 5,
     "sets": 0
   },
   "team2": {
     "name": "World",
     "score": 0,
     "fouls": 0,
-    "timeouts": 0,
+    "timeouts": 5,
     "sets": 0
   },
   "period": 1,

@@ -22,6 +22,15 @@ Then open scoreboard.html in a browser (or in OBS as a browser source).
   state              print current state
   help               show this help
 
+─── Layout ───────────────────────────────────────────────────────────────────
+  corner <pos>       position corner: tl / tr / bl / br
+                     (top-left, top-right, bottom-left, bottom-right)
+
+─── Element visibility ───────────────────────────────────────────────────────
+  showperiod / hideperiod       toggle the period/quarter badge
+  showfouls / hidefouls         toggle fouls display in stats bar
+  showtimeouts / hidetimeouts   toggle timeouts display in stats bar
+
 ─── Sport mode ───────────────────────────────────────────────────────────────
   mode <sport>       switch mode: generic / basketball / futsal / volleyball
                      (resets score, period, fouls, timeouts; keeps team names)
@@ -79,6 +88,10 @@ MODE_DEFAULTS = {
 DEFAULT_STATE = {
     "mode": "generic",
     "title": "Scoreboard",
+    "corner": "br",
+    "show_period": True,
+    "show_fouls": True,
+    "show_timeouts": True,
     "team1": {"name": "Team 1", "score": 0, "fouls": 0, "timeouts": 0, "sets": 0},
     "team2": {"name": "Team 2", "score": 0, "fouls": 0, "timeouts": 0, "sets": 0},
     "period": 1,
@@ -98,10 +111,14 @@ def load_state() -> dict:
             merged = json.loads(json.dumps(DEFAULT_STATE))
             merged["team1"] = {**DEFAULT_STATE["team1"], **data.get("team1", {})}
             merged["team2"] = {**DEFAULT_STATE["team2"], **data.get("team2", {})}
-            merged["title"]   = data.get("title",   DEFAULT_STATE["title"])
-            merged["visible"] = data.get("visible", DEFAULT_STATE["visible"])
-            merged["mode"]    = data.get("mode",    DEFAULT_STATE["mode"])
-            merged["period"]  = data.get("period",  DEFAULT_STATE["period"])
+            merged["title"]         = data.get("title",         DEFAULT_STATE["title"])
+            merged["visible"]       = data.get("visible",       DEFAULT_STATE["visible"])
+            merged["mode"]          = data.get("mode",          DEFAULT_STATE["mode"])
+            merged["period"]        = data.get("period",        DEFAULT_STATE["period"])
+            merged["corner"]        = data.get("corner",        DEFAULT_STATE["corner"])
+            merged["show_period"]   = data.get("show_period",   DEFAULT_STATE["show_period"])
+            merged["show_fouls"]    = data.get("show_fouls",    DEFAULT_STATE["show_fouls"])
+            merged["show_timeouts"] = data.get("show_timeouts", DEFAULT_STATE["show_timeouts"])
             return merged
         except Exception as e:
             print(f"[warn] Could not load {SCORES_FILE}: {e}. Starting fresh.")
@@ -168,8 +185,12 @@ def print_state(s: dict) -> None:
     t1, t2 = s["team1"], s["team2"]
     mode = s.get("mode", "generic")
     per  = period_label(mode, s.get("period", 1))
-    print(f"\n  Mode: {mode.upper()}   Period: {per}   Visible: {s['visible']}")
-    print(f"  Title: {s['title']}\n")
+    corner = s.get("corner", "br").upper()
+    sp = "ON" if s.get("show_period", True) else "OFF"
+    sf = "ON" if s.get("show_fouls", True) else "OFF"
+    st = "ON" if s.get("show_timeouts", True) else "OFF"
+    print(f"\n  Mode: {mode.upper()}   Period: {per}   Visible: {s['visible']}   Corner: {corner}")
+    print(f"  Title: {s['title']}   Period badge: {sp}   Fouls: {sf}   Timeouts: {st}\n")
     if mode == "volleyball":
         print(f"  {'NAME':<22} {'SETS':>5} {'SCORE':>7}")
         print(f"  {t1['name']:<22} {t1.get('sets', 0):>5} {t1['score']:>7}")
@@ -303,6 +324,19 @@ async def cli(loop: asyncio.AbstractEventLoop) -> None:
                     state["period"] = state.get("period", 1) + 1
             elif cmd == "sets1": state["team1"]["sets"] = int(arg)
             elif cmd == "sets2": state["team2"]["sets"] = int(arg)
+
+            # ── corner / element visibility ───────────────────────────────
+            elif cmd == "corner":
+                if arg not in ("tl", "tr", "bl", "br"):
+                    print("Usage: corner <tl|tr|bl|br>"); changed = False
+                else:
+                    state["corner"] = arg
+            elif cmd == "showperiod":   state["show_period"] = True
+            elif cmd == "hideperiod":   state["show_period"] = False
+            elif cmd == "showfouls":    state["show_fouls"] = True
+            elif cmd == "hidefouls":    state["show_fouls"] = False
+            elif cmd == "showtimeouts": state["show_timeouts"] = True
+            elif cmd == "hidetimeouts": state["show_timeouts"] = False
 
             # ── title / visibility / reset ────────────────────────────────
             elif cmd == "title":
